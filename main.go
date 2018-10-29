@@ -186,6 +186,7 @@ func handlerTickerLatest(w http.ResponseWriter, r *http.Request) {
 func handlerTicker(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		parts := strings.Split(r.URL.Path, "/")
+		fmt.Println(len(parts))
 		if len(parts) == 3 {
 			processingStart := time.Now()
 			http.Header.Add(w.Header(), "content-type", "application/json")
