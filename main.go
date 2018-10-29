@@ -287,8 +287,8 @@ func handlerAdminAPITracks(w http.ResponseWriter, r *http.Request) {
 		for i := 0; i < maxI; i++ {
 			db.Delete(trackIDs[i])
 		}
+		fmt.Fprintf(w, "%d", maxI)
 	}
-	fmt.Fprintf(w, "%d", maxI)
 }
 
 func determineListenAddress() string {
