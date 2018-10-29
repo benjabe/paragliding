@@ -224,14 +224,14 @@ func handlerTicker(w http.ResponseWriter, r *http.Request) {
 			tracks := db.GetAll()
 			var pagedTracks [5]Track
 
-			if len(tracks) < 2 {
+			if len(tracks) == 0 {
 				return
 			}
 
 			ticker := Ticker{}
 
 			currentTrackIndex := 0
-			for tracks[currentTrackIndex].Timestamp <= timestamp {
+			for tracks[currentTrackIndex].Timestamp <= timestamp || currentTrackIndex == len(tracks)-1 {
 				currentTrackIndex++
 			}
 
@@ -243,7 +243,7 @@ func handlerTicker(w http.ResponseWriter, r *http.Request) {
 			}
 
 			ticker.TStart = pagedTracks[0].Timestamp
-			ticker.TStop = tracks[currentTrackIndex].Timestamp
+			ticker.TStop = tracks[currentTrackIndex-1].Timestamp
 			ticker.TLatest = tracks[len(tracks)-1].Timestamp
 			ticker.Processing = int(time.Since(processingStart).Seconds() * 1000)
 			json.NewEncoder(w).Encode(ticker)
