@@ -25,17 +25,21 @@ var webhookDB MongoDB
 var noOfTracks int
 
 func handlerAPI(w http.ResponseWriter, r *http.Request) {
-	// return metadata for api
-	http.Header.Add(w.Header(), "content-type", "application/json")
-	elapsed := time.Since(start)
-	meta.Uptime = fmt.Sprintf(
-		"P%dDT%dH%dM%dS",
-		int(elapsed.Seconds()/86400),
-		int(elapsed.Hours())%24,
-		int(elapsed.Minutes())%60,
-		int(elapsed.Seconds())%60,
-	)
-	json.NewEncoder(w).Encode(meta)
+	if r.Method == "GET" {
+		// return metadata for api
+		http.Header.Add(w.Header(), "content-type", "application/json")
+		elapsed := time.Since(start)
+		meta.Uptime = fmt.Sprintf(
+			"P%dDT%dH%dM%dS",
+			int(elapsed.Seconds()/86400),
+			int(elapsed.Hours())%24,
+			int(elapsed.Minutes())%60,
+			int(elapsed.Seconds())%60,
+		)
+		json.NewEncoder(w).Encode(meta)
+	} else {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+	}
 }
 
 func handlerTrack(w http.ResponseWriter, r *http.Request) {
@@ -101,11 +105,16 @@ func handlerTrack(w http.ResponseWriter, r *http.Request) {
 						newTrackRegistrations[i].WebhookURL,
 						bytes.NewBufferString(str),
 					)
+					if err != nil {
+						http.Error(w, http.StatusText(500), 500)
+						return
+					}
 					req.Header.Set("content-type", "application/json")
 					client := &http.Client{}
 					resp, err := client.Do(req)
 					if err != nil {
-						panic(err)
+						http.Error(w, http.StatusText(500), 500)
+						return
 					}
 					defer resp.Body.Close()
 				}
@@ -166,114 +175,132 @@ func handlerTrack(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlerTickerLatest(w http.ResponseWriter, r *http.Request) {
-	tracks := db.GetAll()
-	fmt.Fprintf(w, "%d", tracks[len(tracks)-1].Timestamp)
+	if r.Method == "GET" {
+		tracks := db.GetAll()
+		fmt.Fprintf(w, "%d", tracks[len(tracks)-1].Timestamp)
+	} else {
+		http.Error(w, http.StatusText(400), 400)
+	}
 }
 
 func handlerTicker(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 {
-		processingStart := time.Now()
-		http.Header.Add(w.Header(), "content-type", "application/json")
-		tracks := db.GetAll()
+	if r.Method == "GET" {
+		parts := strings.Split(r.URL.Path, "/")
+		if len(parts) == 3 {
+			processingStart := time.Now()
+			http.Header.Add(w.Header(), "content-type", "application/json")
+			tracks := db.GetAll()
 
-		if len(tracks) == 0 {
-			return
-		}
-
-		ticker := Ticker{}
-		for i := 0; i < 5; i++ { // TODO: this 5 is hardcoded (it shouldn't be)
-			if len(tracks) > i {
-				ticker.Tracks[i] = tracks[i].TrackID
+			if len(tracks) == 0 {
+				return
 			}
-		}
-		// alright, i know this isn't how this is supposed to work
-		// but i honest-to-god-ly don't how i'm supposed to respond
-		// without just using the stuff i have lying around in the
-		// database, so yeah
-		ticker.TStart = tracks[0].Timestamp
-		ticker.TStop = tracks[int(math.Min(4, float64(len(tracks)-1)))].Timestamp
-		ticker.TLatest = tracks[len(tracks)-1].Timestamp
-		ticker.Processing = int(time.Since(processingStart).Seconds() * 1000)
-		json.NewEncoder(w).Encode(ticker)
-	} else {
-		processingStart := time.Now()
-		http.Header.Add(w.Header(), "content-type", "application/json")
-		ts, err := strconv.Atoi(parts[4])
-		timestamp := int64(ts)
 
-		if err != nil {
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-			return
-		}
+			ticker := Ticker{}
+			for i := 0; i < 5; i++ { // TODO: this 5 is hardcoded (it shouldn't be)
+				if len(tracks) > i {
+					ticker.Tracks[i] = tracks[i].TrackID
+				}
+			}
+			// alright, i know this isn't how this is supposed to work
+			// but i honest-to-god-ly don't how i'm supposed to respond
+			// without just using the stuff i have lying around in the
+			// database, so yeah
+			ticker.TStart = tracks[0].Timestamp
+			ticker.TStop = tracks[int(math.Min(4, float64(len(tracks)-1)))].Timestamp
+			ticker.TLatest = tracks[len(tracks)-1].Timestamp
+			ticker.Processing = int(time.Since(processingStart).Seconds() * 1000)
+			json.NewEncoder(w).Encode(ticker)
+		} else if len(parts) == 4 {
+			processingStart := time.Now()
+			http.Header.Add(w.Header(), "content-type", "application/json")
+			ts, err := strconv.Atoi(parts[4])
+			timestamp := int64(ts)
 
-		tracks := db.GetAll()
-		var pagedTracks [5]Track
+			if err != nil {
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+				return
+			}
 
-		if len(tracks) == 0 {
-			return
-		}
+			tracks := db.GetAll()
+			var pagedTracks [5]Track
 
-		ticker := Ticker{}
+			if len(tracks) == 0 {
+				return
+			}
 
-		currentTrackIndex := 0
-		for tracks[currentTrackIndex].Timestamp <= timestamp {
-			currentTrackIndex++
-		}
+			ticker := Ticker{}
 
-		for i := 0; i < 5; i++ {
-			if currentTrackIndex < len(tracks) {
-				pagedTracks[i] = tracks[currentTrackIndex]
-				ticker.Tracks[i] = tracks[currentTrackIndex].TrackID
+			currentTrackIndex := 0
+			for tracks[currentTrackIndex].Timestamp <= timestamp {
 				currentTrackIndex++
 			}
-		}
 
-		ticker.TStart = pagedTracks[0].Timestamp
-		ticker.TStop = tracks[currentTrackIndex-1].Timestamp
-		ticker.TLatest = tracks[len(tracks)-1].Timestamp
-		ticker.Processing = int(time.Since(processingStart).Seconds() * 1000)
-		json.NewEncoder(w).Encode(ticker)
+			for i := 0; i < 5; i++ {
+				if currentTrackIndex < len(tracks) {
+					pagedTracks[i] = tracks[currentTrackIndex]
+					ticker.Tracks[i] = tracks[currentTrackIndex].TrackID
+					currentTrackIndex++
+				}
+			}
+
+			ticker.TStart = pagedTracks[0].Timestamp
+			ticker.TStop = tracks[currentTrackIndex-1].Timestamp
+			ticker.TLatest = tracks[len(tracks)-1].Timestamp
+			ticker.Processing = int(time.Since(processingStart).Seconds() * 1000)
+			json.NewEncoder(w).Encode(ticker)
+		} else {
+			http.Error(w, http.StatusText(404), 404)
+		}
+	} else {
+		http.Error(w, http.StatusText(400), 400)
 	}
 }
 
 func handlerWebhookNewTrack(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	fmt.Println(parts[5])
-	if len(parts) < 7 {
-		var newTrackRegistration NewTrackRegistration
-		decoder := json.NewDecoder(r.Body)
-		decoder.Decode(&newTrackRegistration)
+	if r.Method == "GET" {
+		parts := strings.Split(r.URL.Path, "/")
+		fmt.Println(parts[5])
+		if len(parts) < 7 {
+			var newTrackRegistration NewTrackRegistration
+			decoder := json.NewDecoder(r.Body)
+			decoder.Decode(&newTrackRegistration)
 
-		objectID := bson.NewObjectId()
-		idString := ID{objectID.Hex()}
+			objectID := bson.NewObjectId()
+			idString := ID{objectID.Hex()}
 
-		newTrackRegistration.ID = objectID
-		newTrackRegistration.WebhookID = idString.ID
-		webhookDB.AddNewTrackRegistration(newTrackRegistration)
-	} else {
-		if r.Method == "GET" {
-			http.Header.Add(w.Header(), "content-type", "application/json")
-			webhook, ok := webhookDB.GetWebhook(parts[5])
-			if !ok {
-				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			newTrackRegistration.ID = objectID
+			newTrackRegistration.WebhookID = idString.ID
+			webhookDB.AddNewTrackRegistration(newTrackRegistration)
+		} else {
+			if r.Method == "GET" {
+				http.Header.Add(w.Header(), "content-type", "application/json")
+				webhook, ok := webhookDB.GetWebhook(parts[5])
+				if !ok {
+					http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 
+				}
+				json.NewEncoder(w).Encode(webhook)
+			} else if r.Method == "DELETE" {
+				http.Header.Add(w.Header(), "content-type", "application/json")
+				webhook, ok := webhookDB.GetWebhook(parts[5])
+				ok = webhookDB.DeleteWebhook(parts[5])
+				if !ok {
+					http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+				}
+				json.NewEncoder(w).Encode(webhook)
 			}
-			json.NewEncoder(w).Encode(webhook)
-		} else if r.Method == "DELETE" {
-			http.Header.Add(w.Header(), "content-type", "application/json")
-			webhook, ok := webhookDB.GetWebhook(parts[5])
-			ok = webhookDB.DeleteWebhook(parts[5])
-			if !ok {
-				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-			}
-			json.NewEncoder(w).Encode(webhook)
 		}
+	} else {
+		http.Error(w, http.StatusText(400), 400)
 	}
 }
 
 func handlerAdminAPITracksCount(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "%d", db.Count())
+	if r.Method == "GET" {
+		fmt.Fprintf(w, "%d", db.Count())
+	} else {
+		http.Error(w, http.StatusText(400), 400)
+	}
 }
 
 func handlerAdminAPITracks(w http.ResponseWriter, r *http.Request) {
@@ -288,6 +315,8 @@ func handlerAdminAPITracks(w http.ResponseWriter, r *http.Request) {
 			db.Delete(trackIDs[i])
 		}
 		fmt.Fprintf(w, "%d", maxI)
+	} else {
+		http.Error(w, http.StatusText(400), 400)
 	}
 }
 

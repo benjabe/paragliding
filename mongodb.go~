@@ -49,12 +49,12 @@ type NewTrackRegistration struct {
 
 // ID exists solely because I'm a lazy programmer
 type ID struct {
-	ID string `json:id`
+	ID string `json:"id"`
 }
 
 // IDContainer contains IDs
 type IDContainer struct {
-	IDs []string `json:ids`
+	IDs []string `json:"ids"`
 }
 
 /*
