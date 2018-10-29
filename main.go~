@@ -186,8 +186,7 @@ func handlerTickerLatest(w http.ResponseWriter, r *http.Request) {
 func handlerTicker(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		parts := strings.Split(r.URL.Path, "/")
-		fmt.Fprintln(w, len(parts))
-		if len(parts) == 3 {
+		if len(parts) == 5 {
 			processingStart := time.Now()
 			http.Header.Add(w.Header(), "content-type", "application/json")
 			tracks := db.GetAll()
@@ -211,7 +210,7 @@ func handlerTicker(w http.ResponseWriter, r *http.Request) {
 			ticker.TLatest = tracks[len(tracks)-1].Timestamp
 			ticker.Processing = int(time.Since(processingStart).Seconds() * 1000)
 			json.NewEncoder(w).Encode(ticker)
-		} else if len(parts) == 4 {
+		} else if len(parts) == 6 {
 			processingStart := time.Now()
 			http.Header.Add(w.Header(), "content-type", "application/json")
 			ts, err := strconv.Atoi(parts[4])
