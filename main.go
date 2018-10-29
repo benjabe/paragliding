@@ -224,7 +224,7 @@ func handlerTicker(w http.ResponseWriter, r *http.Request) {
 			tracks := db.GetAll()
 			var pagedTracks [5]Track
 
-			if len(tracks) == 0 {
+			if len(tracks) < 2 {
 				return
 			}
 
