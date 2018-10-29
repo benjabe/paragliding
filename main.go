@@ -60,11 +60,11 @@ func handlerTrack(w http.ResponseWriter, r *http.Request) {
 			igcTrack.Task.Finish = igcTrack.Points[len(igcTrack.Points)-1]
 			igcTrack.Task.Turnpoints = igcTrack.Points[1 : len(igcTrack.Points)-2]
 
-			objectId := bson.NewObjectId()
-			idString := ID{objectId.Hex()}
+			objectID := bson.NewObjectId()
+			idString := ID{objectID.Hex()}
 			timestamp := int64(time.Now().UnixNano() / 1000000)
 			track := Track{
-				objectId,
+				objectID,
 				igcTrack.Header.Date,
 				igcTrack.Header.Pilot,
 				igcTrack.Header.GliderType,
@@ -245,10 +245,10 @@ func handlerWebhookNewTrack(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		decoder.Decode(&newTrackRegistration)
 
-		objectId := bson.NewObjectId()
-		idString := ID{objectId.Hex()}
+		objectID := bson.NewObjectId()
+		idString := ID{objectID.Hex()}
 
-		newTrackRegistration.Id = objectId
+		newTrackRegistration.ID = objectID
 		newTrackRegistration.WebhookID = idString.ID
 		webhookDB.AddNewTrackRegistration(newTrackRegistration)
 	} else {
